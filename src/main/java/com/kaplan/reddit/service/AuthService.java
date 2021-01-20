@@ -1,6 +1,7 @@
 package com.kaplan.reddit.service;
 
 import com.kaplan.reddit.dto.RegisterRequestParam;
+import com.kaplan.reddit.exceptions.SpringRedditException;
 import com.kaplan.reddit.model.NotificationEmail;
 import com.kaplan.reddit.model.User;
 import com.kaplan.reddit.model.VerificationToken;
@@ -12,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static java.time.Instant.now;
@@ -45,6 +47,14 @@ public class AuthService {
         mailService.sendMail(new NotificationEmail("Please Activate your account", user.getEmail(), message));
     }
 
+    @Transactional
+    void fetchUserAndEnable(VerificationToken verificationToken) {
+        String username = verificationToken.getUser().getUsername();
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new SpringRedditException("User Not Found with id - " + username));
+        user.setEnabled(true);
+        userRepository.save(user);
+    }
+
     private String generateVerificationToken(User user) {
         String token = UUID.randomUUID().toString();
         VerificationToken verificationToken = new VerificationToken();
@@ -53,6 +63,13 @@ public class AuthService {
         verificationTokenRepository.save(verificationToken);
         return token;
     }
+
+    public void verifyAccount(String token) {
+        Optional<VerificationToken> verificationTokenOptional = verificationTokenRepository.findByToken(token);
+        verificationTokenOptional.orElseThrow(() -> new SpringRedditException("Invalid Token"));
+        fetchUserAndEnable(verificationTokenOptional.get());
+    }
+
 
     private String encodePassword(String password) {
         return passwordEncoder.encode(password);
